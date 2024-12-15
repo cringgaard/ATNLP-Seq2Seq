@@ -21,7 +21,7 @@ experiment3b_test = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/hea
 
 
 class SCANDataset(Dataset):
-    def __init__(self, data_file):
+    def __init__(self, data_file, max_len):
         self.data = []
 
         data_dir = os.path.join("data", data_file)
@@ -37,8 +37,8 @@ class SCANDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        src, tgt = self.data[idx]
-        return src, tgt
+        # TODO: tokenize, pad and return as tensors
+        pass
 
 
 def make_dataloader(data_file, batch_size, shuffle=True):
