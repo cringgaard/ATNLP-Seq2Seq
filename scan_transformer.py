@@ -300,6 +300,3 @@ with torch.no_grad():
 assert (
     out.shape == expected_out_shape
 ), f"wrong output shape, expected: {expected_out_shape}"
-
-
-print("If you can read this, the model seems to be working fine!")
