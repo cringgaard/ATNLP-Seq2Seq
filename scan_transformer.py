@@ -295,7 +295,7 @@ expected_out_shape = torch.Size([4, 80, 220])
 
 with torch.no_grad():
     out = model(src_in, tgt_in)
-    print("Output shape:", out.shape)  # Debug step, left in for convenience
+#    print("Output shape:", out.shape)  # Debug step, left in for convenience
 
 assert (
     out.shape == expected_out_shape
