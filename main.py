@@ -16,11 +16,10 @@ hyperparameters = experiment_hyperparameters["1"]
 
 # Load the dataset
 dataloader_res = make_dataloader(
-    "experiment_1_train.txt", hyperparameters["BATCH_SIZE"], 80, desired_percentage=0.64
+    "experiment_1_train.txt", hyperparameters["BATCH_SIZE"], 80, desired_percentage=0.01
 )
 train_dataloader = dataloader_res["dataloader"]
 train_pad_idxs = dataloader_res["pad_idxs"]
-vocab_sizes = dataloader_res["vocab_sizes"]
 
 test_dataloader_res = make_dataloader(
     "experiment_1_test.txt", hyperparameters["BATCH_SIZE"], 80, desired_percentage=1
@@ -57,7 +56,7 @@ for epoch in range(EPOCHS):
 
         optimizer.zero_grad()
         output = model(src, tgt)
-        loss = criterion(output.view(-1, vocab_sizes[1]), tgt.view(-1))
+        loss = criterion(output.view(-1, 6), tgt.view(-1))
         loss.backward()
 
         nn.utils.clip_grad_norm_(
@@ -67,7 +66,7 @@ for epoch in range(EPOCHS):
         optimizer.step()
 
         total_loss += loss.item()
-        print(f"Epoch {epoch}, Batch {i}, Loss: {loss.item():.10f}")
+        print(f"Epoch {epoch}, Batch {i}, Loss: {loss.item():.6f}")
 
 
 # Evaluation loop
@@ -80,11 +79,11 @@ with torch.no_grad():
         tgt = tgt.to(device)
 
         output = model(src, tgt)
-        loss = criterion(output.view(-1, vocab_sizes[1]), tgt.view(-1))
+        loss = criterion(output.view(-1, 6), tgt.view(-1))
 
         total_loss += loss.item()
 
-print(f"Test Loss: {total_loss / len(test_dataloader):.3f}")
+print(f"Test Loss: {total_loss / len(test_dataloader):.6f}")
 
 # Save the model
 if not os.path.exists("models"):
