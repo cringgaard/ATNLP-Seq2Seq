@@ -82,12 +82,19 @@ class SCANDataset(Dataset):
         return self.tgt_map["<PAD>"]
 
 
-def make_dataloader(data_file, batch_size, max_len, shuffle=False):
+def make_dataloader(data_file, batch_size, max_len, desired_percentage=1):
     """Quickly construct a dataloader for the fetched, for easy import in main script"""
     dataset = SCANDataset(data_file, max_len)
 
+    # Randomly select a subset of the dataset
+
+    subset = int(len(dataset) * desired_percentage)
+    print(f"Using {subset} samples out of {len(dataset)}")
+    subset_indices = torch.randperm(len(dataset))[:subset]
+    subset_dataset = torch.utils.data.Subset(dataset, subset_indices)
+
     sampler = torch.utils.data.RandomSampler(
-        dataset, replacement=True, num_samples=100000
+        subset_dataset, replacement=True, num_samples=100000
     )
 
     vocabs = [dataset.src_vocab, dataset.tgt_vocab]
@@ -97,9 +104,7 @@ def make_dataloader(data_file, batch_size, max_len, shuffle=False):
     pad_idxs = [dataset.src_pad_idx(), dataset.tgt_pad_idx()]
 
     return {
-        "dataloader": DataLoader(
-            dataset, sampler=sampler, batch_size=batch_size, shuffle=shuffle
-        ),
+        "dataloader": DataLoader(dataset, sampler=sampler, batch_size=batch_size),
         "vocabs": vocabs,
         "vocab_sizes": vocab_sizes,
         "maps": maps,

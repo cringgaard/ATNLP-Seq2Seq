@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import os
 
 # Epochs is not listed in the hyperparameters, so I'll use 15 as a default
-EPOCHS = 15
+EPOCHS = 1
 
 device = get_device()
 
@@ -16,14 +16,14 @@ hyperparameters = experiment_hyperparameters["1"]
 
 # Load the dataset
 dataloader_res = make_dataloader(
-    "experiment_1_train.txt", hyperparameters["BATCH_SIZE"], 80
+    "experiment_1_train.txt", hyperparameters["BATCH_SIZE"], 80, desired_percentage=0.64
 )
 train_dataloader = dataloader_res["dataloader"]
 train_pad_idxs = dataloader_res["pad_idxs"]
 vocab_sizes = dataloader_res["vocab_sizes"]
 
 test_dataloader_res = make_dataloader(
-    "experiment_1_test.txt", hyperparameters["BATCH_SIZE"], 80
+    "experiment_1_test.txt", hyperparameters["BATCH_SIZE"], 80, desired_percentage=1
 )
 test_dataloader = test_dataloader_res["dataloader"]
 
@@ -67,8 +67,7 @@ for epoch in range(EPOCHS):
         optimizer.step()
 
         total_loss += loss.item()
-
-    print(f"Epoch {epoch+1}, Loss: {total_loss / len(train_dataloader)}")
+        print(f"Epoch {epoch}, Batch {i}, Loss: {loss.item():.10f}")
 
 
 # Evaluation loop
@@ -85,7 +84,7 @@ with torch.no_grad():
 
         total_loss += loss.item()
 
-print(f"Test Loss: {total_loss / len(test_dataloader)}")
+print(f"Test Loss: {total_loss / len(test_dataloader):.3f}")
 
 # Save the model
 if not os.path.exists("models"):
