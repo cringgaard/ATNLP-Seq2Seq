@@ -62,70 +62,61 @@ experiment_hyperparameters = {
 class MultiHeadAttention(nn.Module):
     def __init__(self, emb_dim, num_heads):
         super().__init__()
-        self.emb_dim = emb_dim
         self.num_heads = num_heads
         self.head_dim = emb_dim // num_heads
+        self.query_linear = nn.Linear(emb_dim, num_heads * self.head_dim, bias=False) # W_Q
+        self.key_linear = nn.Linear(emb_dim, num_heads * self.head_dim, bias=False) # W_K
+        self.value_linear = nn.Linear(emb_dim, num_heads * self.head_dim, bias=False) # W_V
+        self.out_linear = nn.Linear(num_heads * self.head_dim, emb_dim, bias=False)
 
-        self.Q_layer = nn.Linear(emb_dim, num_heads * self.head_dim)
-        self.K_layer = nn.Linear(emb_dim, num_heads * self.head_dim)
-        self.V_layer = nn.Linear(emb_dim, num_heads * self.head_dim)
-        self.output_layer = nn.Linear(num_heads * self.head_dim, emb_dim)
 
     def forward(self, query, key, value, mask=None):
-        Q = self.Q_layer(query)
-        K = self.K_layer(key)
-        V = self.V_layer(value)
+        Q = self.query_linear(query)
+        K = self.key_linear(key)
+        V = self.value_linear(value)
         batch_size, seq_len, _ = Q.shape
         Q = Q.view(Q.shape[0], Q.shape[1], self.num_heads, self.head_dim)
         K = K.view(K.shape[0], K.shape[1], self.num_heads, self.head_dim)
         V = V.view(V.shape[0], V.shape[1], self.num_heads, self.head_dim)
-
+        # perform Q * K^T
         key_out = torch.einsum("bqhd,bkhd->bhqk", Q, K) / math.sqrt(self.head_dim)
         if mask is not None:
             key_out = key_out.masked_fill(mask == 0, -1e20)
 
         attention = torch.softmax(
             key_out, dim=-1
-        )  # is batch_size, num_heads, q_seq_len, k_seq_len
+        )
 
         out = torch.einsum("bhqk,bkhd->bqhd", attention, V)
-        # should hopefully be (batch_size, len, num_heads, head_dim)
         out = out.contiguous().view(batch_size, seq_len, self.num_heads * self.head_dim)
 
-        out = self.output_layer(out)
+        out = self.out_linear(out)
         return out
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, emb_dim, num_heads, forward_dim, dropout):
+    def __init__(self, emb_dim, num_heads, dropout, forward_dim):
         super().__init__()
         self.attention = MultiHeadAttention(emb_dim, num_heads)
-        self.dropout = dropout  # used in forward
         self.norm1 = nn.LayerNorm(emb_dim, eps=1e-6)
         self.norm2 = nn.LayerNorm(emb_dim, eps=1e-6)
+        self.drop = nn.Dropout(dropout)
         self.ffn = nn.Sequential(
             nn.Linear(emb_dim, forward_dim),
             nn.ReLU(),
-            nn.Linear(forward_dim, emb_dim),
+            nn.Linear(forward_dim, emb_dim)
         )
 
     def forward(self, query, key, value, mask):
         attention_out = self.attention(query, key, value, mask)
-        x = attention_out + query
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.norm1(x)
-        ffn_out = self.ffn(x)
-        x = ffn_out + x
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.norm2(x)
-        return x
+        attention_out = self.norm1(self.drop(attention_out + query))
+        ffn_out = self.ffn(attention_out)
+        ffn_out = self.norm2(self.drop(ffn_out + attention_out))
+        
+        return ffn_out
 
 
 def get_sinusoid_table(max_len, emb_dim):
-    """
-    Generates a sinusoid table for positional encoding, code provided as is by assignment
-    """
-
     def get_angle(pos, i, emb_dim):
         return pos / 10000 ** ((2 * (i // 2)) / emb_dim)
 
@@ -141,29 +132,24 @@ def get_sinusoid_table(max_len, emb_dim):
 
 class Encoder(nn.Module):
     def __init__(
-        self, vocab_size, emb_dim, num_layers, num_heads, forward_dim, dropout, max_len
+        self,
+        vocab_size,
+        emb_dim,
+        num_layers,
+        num_heads,
+        forward_dim,
+        dropout,
+        max_len,
     ):
         super().__init__()
-        self.emb_dim = emb_dim
-        self.embedding = nn.Embedding(vocab_size, emb_dim)
-        self.max_len = (
-            max_len + 1
-        )  # +1 to account for padding token (I think this is correct, but the notes are unclear to me)
-        self.pos_embedding = get_sinusoid_table(self.max_len, emb_dim).to(device)
-        self.dropout_layer = nn.Dropout(dropout)
-        self.layers = nn.ModuleList(
-            [
-                TransformerBlock(emb_dim, num_heads, forward_dim, dropout)
-                for _ in range(num_layers)
-            ]
-        )
+        self.emb = nn.Embedding(vocab_size, emb_dim)
+        self.pos_emb = nn.Embedding.from_pretrained(get_sinusoid_table(max_len, emb_dim), freeze=True)
+        self.drop = nn.Dropout(dropout)
+        self.layers = nn.ModuleList([TransformerBlock(emb_dim, num_heads, dropout, forward_dim) for _ in range(num_layers)])
 
     def forward(self, x, mask):
-        x = x + 1  # shift by 1 to avoid padding token
-        x = self.embedding(x)
-        positions = torch.arange(x.shape[1]).expand(x.shape[0], x.shape[1]).to(device)
-        x = x + self.pos_embedding[positions]
-        x = self.dropout_layer(x)
+        pos_encodings = self.pos_emb(torch.arange(start=1, end=x.size(1)+1, device=x.device))
+        x = self.drop(self.emb(x) + pos_encodings)
         for layer in self.layers:
             x = layer(x, x, x, mask)
         return x
@@ -173,45 +159,41 @@ class DecoderBlock(nn.Module):
     def __init__(self, emb_dim, num_heads, forward_dim, dropout):
         super().__init__()
         self.norm = nn.LayerNorm(emb_dim, eps=1e-6)
-        self.forward_dim = forward_dim
-        self.dropout = dropout
         self.attention = MultiHeadAttention(emb_dim, num_heads)
-        self.block = TransformerBlock(emb_dim, num_heads, forward_dim, dropout)
+        self.transformer_block = TransformerBlock(emb_dim, num_heads, dropout, forward_dim)
+        self.drop = nn.Dropout(dropout)
 
     def forward(self, x, value, key, src_mask, tgt_mask):
-        attention_out = self.attention(x, x, x, tgt_mask)
-        x = attention_out + x
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.norm(x)  # output is the new query, run through the block
-        x = self.block(x, key, value, src_mask)
-        return x
-
+        self_attention = self.attention(x, x, x, tgt_mask)
+        self_attention = self.norm(self.drop(self_attention + x)) # query
+        out = self.transformer_block(self_attention, key, value, src_mask)
+        return  out
 
 class Decoder(nn.Module):
     def __init__(
-        self, vocab_size, emb_dim, num_layers, num_heads, forward_dim, dropout, max_len
+        self,
+        vocab_size,
+        emb_dim,
+        num_layers,
+        num_heads,
+        forward_dim,
+        dropout,
+        max_len
     ):
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, emb_dim)
-        self.dropout = nn.Dropout(dropout)
-        self.layers = nn.ModuleList(
-            [
-                DecoderBlock(emb_dim, num_heads, forward_dim, dropout)
-                for _ in range(num_layers)
-            ]
-        )
-        self.positional_encoding = nn.Embedding(max_len, emb_dim)
-        self.output_layer = nn.Linear(emb_dim, vocab_size)
+        self.emb = nn.Embedding(vocab_size, emb_dim)
+        self.drop = nn.Dropout(dropout)
+        self.pos_emb = nn.Embedding(max_len, emb_dim)
+        self.layers = nn.ModuleList([DecoderBlock(emb_dim, num_heads, forward_dim, dropout) for _ in range(num_layers)])
+        self.out = nn.Linear(emb_dim, vocab_size)
 
     def forward(self, x, encoder_out, src_mask, tgt_mask):
-        x = self.embedding(x)
-        positions = torch.arange(x.shape[1]).expand(x.shape[0], x.shape[1]).to(device)
-        x = x + self.positional_encoding(positions)
-        x = self.dropout(x)
+        embeddings = self.emb(x)
+        pos_encodings = self.pos_emb(torch.arange(start=0, end=x.size(1), device=x.device)) # no shifting
+        x = self.drop(embeddings + pos_encodings)
         for layer in self.layers:
             x = layer(x, encoder_out, encoder_out, src_mask, tgt_mask)
-        x = self.output_layer(x)
-        return x
+        return self.out(x)
 
 
 class Transformer(nn.Module):
@@ -229,28 +211,8 @@ class Transformer(nn.Module):
         max_len=128,
     ):
         super().__init__()
-
-        encoder = Encoder(
-            src_vocab_size,
-            emb_dim,
-            num_layers,
-            num_heads,
-            forward_dim,
-            dropout,
-            max_len,
-        )
-        decoder = Decoder(
-            tgt_vocab_size,
-            emb_dim,
-            num_layers,
-            num_heads,
-            forward_dim,
-            dropout,
-            max_len,
-        )
-
-        self.encoder = encoder
-        self.decoder = decoder
+        self.encoder = Encoder(src_vocab_size, emb_dim, num_layers, num_heads, forward_dim, dropout, max_len)
+        self.decoder = Decoder(tgt_vocab_size, emb_dim, num_layers, num_heads, forward_dim, dropout, max_len)
         self.src_pad_idx = src_pad_idx
         self.tgt_pad_idx = tgt_pad_idx
 
@@ -273,8 +235,7 @@ class Transformer(nn.Module):
         src_mask = self.create_src_mask(src)
         tgt_mask = self.create_tgt_mask(tgt)
         encoder_out = self.encoder(src, src_mask)
-        out = self.decoder(tgt, encoder_out, src_mask, tgt_mask)
-        return out
+        return self.decoder(tgt, encoder_out, src_mask, tgt_mask)
 
 
 model = Transformer(

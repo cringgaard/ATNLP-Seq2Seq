@@ -5,8 +5,25 @@ import torch
 
 # Experiment 1: Simple split
 # NOTE: We could also use splits from github, not sure what is easiest
-experiment_1_train = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/tasks_train_simple.txt"
-experiment_1_test = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/tasks_test_simple.txt"
+experiment_1_train_full = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/tasks_train_simple.txt"
+experiment_1_test_full = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/tasks_test_simple.txt"
+
+experiment_1_train_p1 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_train_simple_p1.txt"
+experiment_1_train_p2 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_train_simple_p2.txt"
+experiment_1_train_p4 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_train_simple_p4.txt"
+experiment_1_train_p8 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_train_simple_p8.txt"
+experiment_1_train_p16 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_train_simple_p16.txt"
+experiment_1_train_p32 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_train_simple_p32.txt"
+experiment_1_train_p64 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_train_simple_p64.txt"
+
+experiment_1_test_p1 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_test_simple_p1.txt"
+experiment_1_test_p2 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_test_simple_p2.txt"
+experiment_1_test_p4 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_test_simple_p4.txt"
+experiment_1_test_p8 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_test_simple_p8.txt"
+experiment_1_test_p16 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_test_simple_p16.txt"
+experiment_1_test_p32 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_test_simple_p32.txt"
+experiment_1_test_p64 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/simple_split/size_variations/tasks_test_simple_p64.txt"
+
 
 # Experiment 2: Train on shorter sequences
 experiment_2_train = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/length_split/tasks_train_length.txt"
@@ -87,7 +104,7 @@ class SCANDataset(Dataset):
         return self.tgt_map["<PAD>"]
 
 
-def make_dataloader(data_file, batch_size, max_len, desired_percentage=1, upscale=True):
+def make_dataloader(data_file, batch_size, max_len, desired_percentage=1, upscale=False, num_samples=100000):
     """Quickly construct a dataloader for the fetched, for easy import in main script"""
     dataset = SCANDataset(data_file, max_len)
 
@@ -100,10 +117,10 @@ def make_dataloader(data_file, batch_size, max_len, desired_percentage=1, upscal
 
     if upscale:
         sampler = torch.utils.data.RandomSampler(
-            subset_dataset, replacement=True, num_samples=100000
+            subset_dataset, replacement=True, num_samples=num_samples
         )
     else:
-        subset_dataset = dataset  # No need to sample
+        # subset_dataset = dataset  # No need to sample
         sampler = None
 
     vocabs = [dataset.src_vocab, dataset.tgt_vocab]
@@ -113,7 +130,7 @@ def make_dataloader(data_file, batch_size, max_len, desired_percentage=1, upscal
     pad_idxs = [dataset.src_pad_idx(), dataset.tgt_pad_idx()]
 
     return {
-        "dataloader": DataLoader(dataset, sampler=sampler, batch_size=batch_size),
+        "dataloader": DataLoader(subset_dataset, sampler=sampler, batch_size=batch_size),
         "vocabs": vocabs,
         "vocab_sizes": vocab_sizes,
         "maps": maps,
@@ -143,8 +160,15 @@ def fetch_dataset(train_url, test_url, trial_name):
 
 if __name__ == "__main__":
     for trial_name, train_url, test_url in [
-        ("experiment_1", experiment_1_train, experiment_1_test),
-        ("experiment_2", experiment_2_train, experiment_2_test),
+        ("experiment_1_full", experiment_1_train_full, experiment_1_test_full),
+        ("experiment_2_full", experiment_2_train, experiment_2_test),
+        ("experiment_1_p1", experiment_1_train_p1, experiment_1_test_p1),
+        ("experiment_1_p2", experiment_1_train_p2, experiment_1_test_p2),
+        ("experiment_1_p4", experiment_1_train_p4, experiment_1_test_p4),
+        ("experiment_1_p8", experiment_1_train_p8, experiment_1_test_p8),
+        ("experiment_1_p16", experiment_1_train_p16, experiment_1_test_p16),
+        ("experiment_1_p32", experiment_1_train_p32, experiment_1_test_p32),
+        ("experiment_1_p64", experiment_1_train_p64, experiment_1_test_p64),
         ("experiment_3a", experiment3a_train, experiment3a_test),
         ("experiment_3b", experiment3b_train, experiment3b_test),
     ]:
