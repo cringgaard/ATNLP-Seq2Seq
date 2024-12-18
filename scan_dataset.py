@@ -54,6 +54,10 @@ class SCANDataset(Dataset):
         # Add padding token to the vocabularies
         self.src_map["<PAD>"] = len(self.src_map)
         self.tgt_map["<PAD>"] = len(self.tgt_map)
+        self.src_map["<SOS>"] = len(self.src_map)
+        self.tgt_map["<SOS>"] = len(self.tgt_map)
+        self.src_map["<EOS>"] = len(self.src_map)
+        self.tgt_map["<EOS>"] = len(self.tgt_map)
         self.src_inv_map = {idx: word for idx, word in enumerate(self.src_vocab)}
         self.tgt_inv_map = {idx: word for idx, word in enumerate(self.tgt_vocab)}
 
@@ -68,7 +72,8 @@ class SCANDataset(Dataset):
 
         src = [self.src_map[word] for word in src_words]
         tgt = [self.tgt_map[word] for word in tgt_words]
-
+        src = [self.src_map["<SOS>"]] + src + [self.src_map["<EOS>"]]
+        tgt = [self.tgt_map["<SOS>"]] + tgt + [self.tgt_map["<EOS>"]]
         # Pad the sequences on the right
         src = src + [self.src_map["<PAD>"]] * (self.max_len - len(src))
         tgt = tgt + [self.tgt_map["<PAD>"]] * (self.max_len - len(tgt))
@@ -82,7 +87,7 @@ class SCANDataset(Dataset):
         return self.tgt_map["<PAD>"]
 
 
-def make_dataloader(data_file, batch_size, max_len, desired_percentage=1):
+def make_dataloader(data_file, batch_size, max_len, desired_percentage=1, upscale=True):
     """Quickly construct a dataloader for the fetched, for easy import in main script"""
     dataset = SCANDataset(data_file, max_len)
 
@@ -93,9 +98,13 @@ def make_dataloader(data_file, batch_size, max_len, desired_percentage=1):
     subset_indices = torch.randperm(len(dataset))[:subset]
     subset_dataset = torch.utils.data.Subset(dataset, subset_indices)
 
-    sampler = torch.utils.data.RandomSampler(
-        subset_dataset, replacement=True, num_samples=100000
-    )
+    if upscale:
+        sampler = torch.utils.data.RandomSampler(
+            subset_dataset, replacement=True, num_samples=100000
+        )
+    else:
+        subset_dataset = dataset  # No need to sample
+        sampler = None
 
     vocabs = [dataset.src_vocab, dataset.tgt_vocab]
     vocab_sizes = [dataset.src_vocab_size, dataset.tgt_vocab_size]

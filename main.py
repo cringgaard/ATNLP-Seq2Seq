@@ -10,26 +10,35 @@ import os
 EPOCHS = 1
 
 device = get_device()
+# device = torch.device("cpu")
 
 # I'll use the first experiment hyperparameters for this task
 hyperparameters = experiment_hyperparameters["1"]
 
 # Load the dataset
 dataloader_res = make_dataloader(
-    "experiment_1_train.txt", hyperparameters["BATCH_SIZE"], 80, desired_percentage=0.01
+    "tasks_train_simple_p1.txt",
+    hyperparameters["BATCH_SIZE"],
+    80,
+    desired_percentage=0.01,
+    upscale=False,
 )
 train_dataloader = dataloader_res["dataloader"]
 train_pad_idxs = dataloader_res["pad_idxs"]
 
 test_dataloader_res = make_dataloader(
-    "experiment_1_test.txt", hyperparameters["BATCH_SIZE"], 80, desired_percentage=1
+    "tasks_test_simple_p1.txt",
+    hyperparameters["BATCH_SIZE"],
+    80,
+    desired_percentage=1,
+    upscale=False,
 )
 test_dataloader = test_dataloader_res["dataloader"]
 
 # Initialize the model
 model = Transformer(
-    src_vocab_size=13,
-    tgt_vocab_size=6,
+    src_vocab_size=13 + 3,
+    tgt_vocab_size=6 + 3,  # 3 for <PAD>, <SOS>, <EOS>
     src_pad_idx=train_pad_idxs[0],
     tgt_pad_idx=train_pad_idxs[1],
     emb_dim=hyperparameters["EMB_DIM"],
@@ -56,7 +65,7 @@ for epoch in range(EPOCHS):
 
         optimizer.zero_grad()
         output = model(src, tgt)
-        loss = criterion(output.view(-1, 6), tgt.view(-1))
+        loss = criterion(output.view(-1, 6 + 3), tgt.view(-1))
         loss.backward()
 
         nn.utils.clip_grad_norm_(
@@ -71,7 +80,11 @@ for epoch in range(EPOCHS):
 
 # Evaluation loop
 model.eval()
-total_loss = 0
+# We are interested in per batch accuracy, as well as overall accuracy both for tokens and sequences
+total_token_accuracy = 0
+total_sequence_accuracy = 0
+total_tokens = 0
+total_sequences = 0
 
 with torch.no_grad():
     for i, (src, tgt) in enumerate(test_dataloader):
@@ -79,11 +92,32 @@ with torch.no_grad():
         tgt = tgt.to(device)
 
         output = model(src, tgt)
-        loss = criterion(output.view(-1, 6), tgt.view(-1))
+        output = output.argmax(dim=-1)
 
-        total_loss += loss.item()
+        if i == 0:
+            print("Output shape:", output.shape)
+            print("Input example:", src[0])
+            print("Output example:", output[0])
+            print("Target example:", tgt[0])
 
-print(f"Test Loss: {total_loss / len(test_dataloader):.6f}")
+        # Calculate token accuracy
+        correct_tokens = (output == tgt).sum().item()
+        total_tokens += output.numel()
+        total_token_accuracy += correct_tokens
+
+        # Calculate sequence accuracy
+        correct_sequences = (output == tgt).all(dim=-1).sum().item()
+        total_sequences += output.shape[0]
+        total_sequence_accuracy += correct_sequences
+
+        print(
+            f"Batch {i}, Token Accuracy: {correct_tokens / output.numel():.6f}, Sequence Accuracy: {correct_sequences / output.shape[0]:.6f}"
+        )
+
+print(
+    f"Overall Token Accuracy: {total_token_accuracy / total_tokens:.6f}, Overall Sequence Accuracy: {total_sequence_accuracy / total_sequences:.6f}"
+)
+
 
 # Save the model
 if not os.path.exists("models"):
