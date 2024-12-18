@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import os
 
 # Epochs is not listed in the hyperparameters, so I'll use 15 as a default
-EPOCHS = 1
+EPOCHS = 2
 
 device = get_device()
 # device = torch.device("cpu")
@@ -17,17 +17,17 @@ hyperparameters = experiment_hyperparameters["1"]
 
 # Load the dataset
 dataloader_res = make_dataloader(
-    "tasks_train_simple_p1.txt",
+    "tasks_train_simple_p2.txt",
     hyperparameters["BATCH_SIZE"],
     80,
-    desired_percentage=0.01,
+    desired_percentage=1,
     upscale=False,
 )
 train_dataloader = dataloader_res["dataloader"]
 train_pad_idxs = dataloader_res["pad_idxs"]
 
 test_dataloader_res = make_dataloader(
-    "tasks_test_simple_p1.txt",
+    "tasks_test_simple_p2.txt",
     hyperparameters["BATCH_SIZE"],
     80,
     desired_percentage=1,
@@ -118,9 +118,14 @@ print(
     f"Overall Token Accuracy: {total_token_accuracy / total_tokens:.6f}, Overall Sequence Accuracy: {total_sequence_accuracy / total_sequences:.6f}"
 )
 
+with open("experiment-1-results.txt", "a") as f:
+    f.write(
+        f"Split: 2, Token Accuracy: {total_token_accuracy / total_tokens:.6f}, Sequence Accuracy: {total_sequence_accuracy / total_sequences:.6f}, {EPOCHS} epochs \n"
+    )
+
 
 # Save the model
 if not os.path.exists("models"):
     os.makedirs("models")
 
-torch.save(model.state_dict(), "models/experiment1.pt")
+torch.save(model.state_dict(), "models/experiment1-1.pt")
