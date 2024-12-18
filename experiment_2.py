@@ -15,7 +15,7 @@ dataloader_res = make_dataloader(
     f"experiment_2_full_train.txt",
     hyperparameters["BATCH_SIZE"],
     60,
-    desired_percentage=0.1,
+    desired_percentage=1,
     upscale=False,
 )
 train_dataloader = dataloader_res["dataloader"]
@@ -32,8 +32,8 @@ test_dataloader = test_dataloader_res["dataloader"]
 
 # Initialize the model
 model = Transformer(
-    src_vocab_size=13 + 1,
-    tgt_vocab_size=6 + 1,  # 3 for <PAD>, <SOS>, <EOS> -> 1 for <PAD>
+    src_vocab_size=13 + 3,
+    tgt_vocab_size=6 + 3,  # 3 for <PAD>, <SOS>, <EOS>
     src_pad_idx=train_pad_idxs[0],
     tgt_pad_idx=train_pad_idxs[1],
     emb_dim=hyperparameters["EMB_DIM"],
@@ -59,7 +59,7 @@ for epoch in range(EPOCHS):
 
         optimizer.zero_grad()
         output = model(src, tgt)
-        loss = criterion(output.view(-1, 6 + 1), tgt.view(-1))
+        loss = criterion(output.view(-1, 6 + 3), tgt.view(-1))
         loss.backward()
 
         nn.utils.clip_grad_norm_(
@@ -87,23 +87,25 @@ def get_accuracy(output, tgt, output_pad_idx, tgt_pad_idx):
 model.eval()
 
 # to count length of target and source sequences without padding
-def get_seq_len(seq, pad_idx=13):
+def get_seq_len(seq, pad_idx):
     for i, token in enumerate(seq[0]):
         if token == pad_idx:
-            return i-1
+            return i
 
 pred_true_pairs_tgt = {}
 pred_true_pairs_src = {}
 
 with torch.no_grad():
     for i, (src, tgt) in enumerate(test_dataloader):
-        src_len = get_seq_len(src,13)
-        tgt_len = get_seq_len(tgt,6)
+        src_len = get_seq_len(src,train_pad_idxs[0])
+        tgt_len = get_seq_len(tgt,train_pad_idxs[1])
 
         src = src.to(device)
         tgt = tgt.to(device)
-
-        output = model(src, tgt)
+        SOS_token = torch.tensor([7]).to(device)
+        # Generate from <SOS> token
+        batched_SOS = SOS_token.repeat(tgt.shape[0], 1)
+        output = model(src, batched_SOS)
         output = output.argmax(dim=-1)
 
         if pred_true_pairs_tgt.get(tgt_len) is None:
@@ -112,13 +114,22 @@ with torch.no_grad():
             pred_true_pairs_src[src_len] = []
         pred_true_pairs_tgt[tgt_len].append((output,tgt))
         pred_true_pairs_src[src_len].append((output,tgt))
+    
 
 token_acc = {}
 sequence_acc = {}
 for key in pred_true_pairs_tgt.keys():
-    token_acc[key] , sequence_acc[key] = get_accuracy(pred_true_pairs_tgt[key][0][0],pred_true_pairs_tgt[key][0][1],train_pad_idxs[1],train_pad_idxs[1])
-
-print(token_acc)
+    preds = []
+    tgts = []
+    for pred, tgt in pred_true_pairs_tgt[key]:
+        preds.append(pred)
+        tgts.append(tgt)
+    preds = torch.cat(preds)
+    tgts = torch.cat(tgts)
+    if key > 45:
+        print("pred",preds)
+        print("true",tgts)
+    token_acc[key], sequence_acc[key] = get_accuracy(preds, tgts, train_pad_idxs[1], train_pad_idxs[1])
 
 # plot the accuracy for each sequence length
 from matplotlib import pyplot as plt
@@ -127,4 +138,41 @@ plt.xlabel("Target Sequence Length")
 plt.ylabel("Token Accuracy")
 plt.title("Token accuracy")
 plt.show()
+
+plt.bar(sequence_acc.keys(), sequence_acc.values())
+plt.xlabel("Target Sequence Length")
+plt.ylabel("Sequence Accuracy")
+plt.title("Sequence accuracy")
+plt.show()
+
+token_acc = {}
+sequence_acc = {}
+for key in pred_true_pairs_src.keys():
+    preds = []
+    tgts = []
+    for pred, tgt in pred_true_pairs_src[key]:
+        preds.append(pred)
+        tgts.append(tgt)
+    preds = torch.cat(preds)
+    tgts = torch.cat(tgts)
+    if key == 48:
+        print("pred",preds)
+        print("true",tgts)
+    token_acc[key], sequence_acc[key] = get_accuracy(preds, tgts, train_pad_idxs[1], train_pad_idxs[1])
+
+# plot the accuracy for each sequence length
+from matplotlib import pyplot as plt
+plt.bar(token_acc.keys(), token_acc.values())
+plt.xlabel("Target Sequence Length")
+plt.ylabel("Token Accuracy")
+plt.title("Token accuracy")
+plt.show()
+
+plt.bar(sequence_acc.keys(), sequence_acc.values())
+plt.xlabel("Target Sequence Length")
+plt.ylabel("Sequence Accuracy")
+plt.title("Sequence accuracy")
+plt.show()
+
+
 

@@ -83,10 +83,10 @@ class SCANDataset(Dataset):
         # Add padding token to the vocabularies
         self.src_map["<PAD>"] = len(self.src_map)
         self.tgt_map["<PAD>"] = len(self.tgt_map)
-        # self.src_map["<SOS>"] = len(self.src_map)
-        # self.tgt_map["<SOS>"] = len(self.tgt_map)
-        # self.src_map["<EOS>"] = len(self.src_map)
-        # self.tgt_map["<EOS>"] = len(self.tgt_map)
+        self.src_map["<SOS>"] = len(self.src_map)
+        self.tgt_map["<SOS>"] = len(self.tgt_map)
+        self.src_map["<EOS>"] = len(self.src_map)
+        self.tgt_map["<EOS>"] = len(self.tgt_map)
         self.src_inv_map = {idx: word for idx, word in enumerate(self.src_vocab)}
         self.tgt_inv_map = {idx: word for idx, word in enumerate(self.tgt_vocab)}
 
@@ -101,8 +101,8 @@ class SCANDataset(Dataset):
 
         src = [self.src_map[word] for word in src_words]
         tgt = [self.tgt_map[word] for word in tgt_words]
-        # src = [self.src_map["<SOS>"]] + src + [self.src_map["<EOS>"]]
-        # tgt = [self.tgt_map["<SOS>"]] + tgt + [self.tgt_map["<EOS>"]]
+        src = [self.src_map["<SOS>"]] + src + [self.src_map["<EOS>"]]
+        tgt = [self.tgt_map["<SOS>"]] + tgt + [self.tgt_map["<EOS>"]]
         # Pad the sequences on the right
         src = src + [self.src_map["<PAD>"]] * (self.max_len - len(src))
         tgt = tgt + [self.tgt_map["<PAD>"]] * (self.max_len - len(tgt))

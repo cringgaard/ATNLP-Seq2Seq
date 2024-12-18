@@ -49,8 +49,8 @@ for split in splits:
 
     # Initialize the model
     model = Transformer(
-        src_vocab_size=13 + 1,
-        tgt_vocab_size=6 + 1,  # 3 for <PAD>, <SOS>, <EOS> -> 1 for <PAD>
+        src_vocab_size=13 + 3,
+        tgt_vocab_size=6 + 3,  # 3 for <PAD>, <SOS>, <EOS>
         src_pad_idx=train_pad_idxs[0],
         tgt_pad_idx=train_pad_idxs[1],
         emb_dim=hyperparameters["EMB_DIM"],
@@ -76,7 +76,7 @@ for split in splits:
 
             optimizer.zero_grad()
             output = model(src, tgt)
-            loss = criterion(output.view(-1, 6 + 1), tgt.view(-1))
+            loss = criterion(output.view(-1, 6 + 3), tgt.view(-1))
             loss.backward()
 
             nn.utils.clip_grad_norm_(
@@ -113,10 +113,14 @@ for split in splits:
         for i, (src, tgt) in enumerate(test_dataloader):
             src = src.to(device)
             tgt = tgt.to(device)
-
-            output = model(src, tgt)
+            SOS_token = torch.tensor([7]).to(device)
+            # Generate from <SOS> token
+            batched_SOS = SOS_token.repeat(tgt.shape[0], 1)
+            output = model(src, batched_SOS)
             output = output.argmax(dim=-1)
-            
+            # keep generating and appending to output until <EOS> token is generated
+            for i in range(1, tgt.shape[1]):
+                output = torch.cat((output, model(src, output[:,-1].unsqueeze(1)).argmax(dim=-1)), dim=1)
             tgts.append(tgt)
             outputs.append(output)
     outputs = torch.cat(outputs)
