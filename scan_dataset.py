@@ -30,15 +30,27 @@ experiment_2_train = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/he
 experiment_2_test = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/length_split/tasks_test_length.txt"
 # Experiment 3: Add primitives
 
-# Experiment 3a: Add primitive jump
-experiment3a_train = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/tasks_train_addprim_jump.txt"
-experiment3a_test = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/tasks_test_addprim_jump.txt"
-# NOTE: WE WON'T ACTUALLY BE USING THESE, GIVEN THAT THE SPLITS NEEDED FOR JUMP ARE ALREADY AVAILABLE
+experiment_3_tl_train = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/tasks_train_addprim_turn_left.txt"
+experiment_3_tl_test = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/tasks_test_addprim_turn_left.txt"
+
+experiment_3_jump_train_0 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/tasks_train_addprim_jump.txt"
+experiment_3_jump_test_0 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/tasks_test_addprim_jump.txt"
+experiment_3_jump_train_1 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_train_addprim_complex_jump_num1_rep1.txt"
+experiment_3_jump_test_1 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_test_addprim_complex_jump_num1_rep1.txt"
+experiment_3_jump_train_2 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_train_addprim_complex_jump_num2_rep1.txt"
+experiment_3_jump_test_2 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_test_addprim_complex_jump_num2_rep1.txt"
+experiment_3_jump_train_4 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_train_addprim_complex_jump_num4_rep1.txt"
+experiment_3_jump_test_4 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_test_addprim_complex_jump_num4_rep1.txt"
+experiment_3_jump_train_8 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_train_addprim_complex_jump_num8_rep1.txt"
+experiment_3_jump_test_8 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_test_addprim_complex_jump_num8_rep1.txt"
+experiment_3_jump_train_16 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_train_addprim_complex_jump_num16_rep1.txt"
+experiment_3_jump_test_16 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_test_addprim_complex_jump_num16_rep1.txt"
+experiment_3_jump_train_32 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_train_addprim_complex_jump_num32_rep1.txt"
+experiment_3_jump_test_32 = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/with_additional_examples/tasks_test_addprim_complex_jump_num32_rep1.txt"
 
 
-# Experiment 3b: Add primitive turn left
-experiment3b_train = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/tasks_train_addprim_turn_left.txt"
-experiment3b_test = "https://raw.githubusercontent.com/brendenlake/SCAN/refs/heads/master/add_prim_split/tasks_test_addprim_turn_left.txt"
+
+
 
 
 class SCANDataset(Dataset):
@@ -169,8 +181,14 @@ if __name__ == "__main__":
         ("experiment_1_p16", experiment_1_train_p16, experiment_1_test_p16),
         ("experiment_1_p32", experiment_1_train_p32, experiment_1_test_p32),
         ("experiment_1_p64", experiment_1_train_p64, experiment_1_test_p64),
-        ("experiment_3a", experiment3a_train, experiment3a_test),
-        ("experiment_3b", experiment3b_train, experiment3b_test),
+        ("experiment_3_tl", experiment_3_tl_train, experiment_3_tl_test),
+        ("experiment_3_jump_0", experiment_3_jump_train_0, experiment_3_jump_test_0),
+        ("experiment_3_jump_1", experiment_3_jump_train_1, experiment_3_jump_test_1),
+        ("experiment_3_jump_2", experiment_3_jump_train_2, experiment_3_jump_test_2),
+        ("experiment_3_jump_4", experiment_3_jump_train_4, experiment_3_jump_test_4),
+        ("experiment_3_jump_8", experiment_3_jump_train_8, experiment_3_jump_test_8),
+        ("experiment_3_jump_16", experiment_3_jump_train_16, experiment_3_jump_test_16),
+        ("experiment_3_jump_32", experiment_3_jump_train_32, experiment_3_jump_test_32),
     ]:
         fetch_dataset(train_url, test_url, trial_name)
         print(f"Downloaded {trial_name} dataset")
