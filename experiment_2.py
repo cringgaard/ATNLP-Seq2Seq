@@ -70,6 +70,19 @@ for epoch in range(EPOCHS):
 
         total_loss += loss.item()
 
+def get_accuracy(output, tgt, output_pad_idx, tgt_pad_idx):
+    # Calculate token accuracy in places where tgt and output are not padding tokens
+    correct_tokens = ((output != output_pad_idx) & (output == tgt)).sum().item()
+    total_tokens = (tgt != tgt_pad_idx).sum().item()
+    total_token_accuracy = correct_tokens / total_tokens
+
+    # Calculate sequence accuracy
+    correct_sequences = (output == tgt).all(dim=-1).sum().item()
+    total_sequences = output.shape[0]
+    total_sequence_accuracy = correct_sequences / total_sequences
+
+    return total_token_accuracy, total_sequence_accuracy
+
 # Evaluation loop
 model.eval()
 
@@ -77,7 +90,7 @@ model.eval()
 def get_seq_len(seq, pad_idx=13):
     for i, token in enumerate(seq[0]):
         if token == pad_idx:
-            return i
+            return i-2
 
 pred_true_pairs_tgt = {}
 pred_true_pairs_src = {}
@@ -100,35 +113,17 @@ with torch.no_grad():
         pred_true_pairs_tgt[tgt_len].append((output,tgt))
         pred_true_pairs_src[src_len].append((output,tgt))
 
-# calculate accuracy for each sequence length
-total_token_accuracy = 0
-total_sequence_accuracy = 0
-total_tokens = 0
-total_sequences = 0
-
 token_acc = {}
 sequence_acc = {}
 for key in pred_true_pairs_tgt.keys():
-    total_token_accuracy = 0
-    total_sequence_accuracy = 0
-    total_tokens = 0
-    total_sequences = 0
-    for output, tgt in pred_true_pairs_tgt[key]:
-        correct_tokens = (output == tgt).sum().item()
-        total_tokens += output.numel()
-        total_token_accuracy += correct_tokens
+    token_acc[key] , sequence_acc[key] = get_accuracy(pred_true_pairs_tgt[key][0][0],pred_true_pairs_tgt[key][0][1],train_pad_idxs[1],train_pad_idxs[1])
 
-        correct_sequences = (output == tgt).all(dim=-1).sum().item()
-        total_sequences += output.shape[0]
-        total_sequence_accuracy += correct_sequences
-
-    token_acc[key] = total_token_accuracy / total_tokens
-    sequence_acc[key] = total_sequence_accuracy / total_sequences
+print(token_acc)
 
 # plot the accuracy for each sequence length
 from matplotlib import pyplot as plt
 plt.bar(token_acc.keys(), token_acc.values())
-plt.xlabel("Sequence Length")
+plt.xlabel("Target Sequence Length")
 plt.ylabel("Token Accuracy")
 plt.title("Token accuracy")
 plt.show()

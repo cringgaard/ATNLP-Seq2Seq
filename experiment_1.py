@@ -93,7 +93,22 @@ for split in splits:
     total_sequence_accuracy = 0
     total_tokens = 0
     total_sequences = 0
+    
+    def get_accuracy(output, tgt, output_pad_idx, tgt_pad_idx):
+        # Calculate token accuracy in places where tgt and output are not padding tokens
+        correct_tokens = ((output != output_pad_idx) & (output == tgt)).sum().item()
+        total_tokens = (tgt != tgt_pad_idx).sum().item()
+        total_token_accuracy = correct_tokens / total_tokens
 
+        # Calculate sequence accuracy
+        correct_sequences = (output == tgt).all(dim=-1).sum().item()
+        total_sequences = output.shape[0]
+        total_sequence_accuracy = correct_sequences / total_sequences
+
+        return total_token_accuracy, total_sequence_accuracy
+
+    outputs = []
+    tgts = []
     with torch.no_grad():
         for i, (src, tgt) in enumerate(test_dataloader):
             src = src.to(device)
@@ -101,21 +116,22 @@ for split in splits:
 
             output = model(src, tgt)
             output = output.argmax(dim=-1)
+            
+            tgts.append(tgt)
+            outputs.append(output)
+    outputs = torch.cat(outputs)
+    tgts = torch.cat(tgts)
+    total_token_accuracy, total_sequence_accuracy = get_accuracy(outputs, tgts, train_pad_idxs[1], train_pad_idxs[1])
+    token_acc.append(total_token_accuracy)
+    sequence_acc.append(total_sequence_accuracy)
+    
 
-            # Calculate token accuracy
-            correct_tokens = (output == tgt).sum().item()
-            total_tokens += output.numel()
-            total_token_accuracy += correct_tokens
-
-            # Calculate sequence accuracy
-            correct_sequences = (output == tgt).all(dim=-1).sum().item()
-            total_sequences += output.shape[0]
-            total_sequence_accuracy += correct_sequences
-
-    token_acc.append(total_token_accuracy / total_tokens)
-    sequence_acc.append(total_sequence_accuracy / total_sequences)
 
 from matplotlib import pyplot as plt
 plt.bar(splits, token_acc)
 plt.title("Token accuracy")
+plt.show()
+
+plt.bar(splits, sequence_acc)
+plt.title("Sequence accuracy")
 plt.show()
