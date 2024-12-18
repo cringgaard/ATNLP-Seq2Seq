@@ -32,8 +32,8 @@ test_dataloader = test_dataloader_res["dataloader"]
 
 # Initialize the model
 model = Transformer(
-    src_vocab_size=13 + 3,
-    tgt_vocab_size=6 + 3,  # 3 for <PAD>, <SOS>, <EOS>
+    src_vocab_size=13 + 1,
+    tgt_vocab_size=6 + 1,  # 3 for <PAD>, <SOS>, <EOS> -> 1 for <PAD>
     src_pad_idx=train_pad_idxs[0],
     tgt_pad_idx=train_pad_idxs[1],
     emb_dim=hyperparameters["EMB_DIM"],
@@ -59,7 +59,7 @@ for epoch in range(EPOCHS):
 
         optimizer.zero_grad()
         output = model(src, tgt)
-        loss = criterion(output.view(-1, 6 + 3), tgt.view(-1))
+        loss = criterion(output.view(-1, 6 + 1), tgt.view(-1))
         loss.backward()
 
         nn.utils.clip_grad_norm_(
@@ -90,7 +90,7 @@ model.eval()
 def get_seq_len(seq, pad_idx=13):
     for i, token in enumerate(seq[0]):
         if token == pad_idx:
-            return i-2
+            return i-1
 
 pred_true_pairs_tgt = {}
 pred_true_pairs_src = {}
