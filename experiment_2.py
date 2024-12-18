@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import os
 from tqdm import tqdm
 
-EPOCHS = 10
+EPOCHS = 5
 device = get_device()
 # device = torch.device("cpu")
 hyperparameters = experiment_hyperparameters["2"]
@@ -90,20 +90,26 @@ def get_accuracy(output, tgt, output_pad_idx, tgt_pad_idx):
 def get_accuracy_oracle_length(output, tgt, EOS_token):
     correct_sequences = 0
     total_sequences = 0
+    correct_tokens = 0
+    total_tokens = 0
     # Calculate sequence accuracy for each sequence length
     for i in range(output.shape[0]):
         is_correct = 1
         for j in range(tgt[i].shape[0]):
-            if tgt[i][j] == EOS_token:
+            if tgt[i][j] == EOS_token: # if we reach the end of the target sequence, break
                 break
-            if output[i][j] != tgt[i][j]:
+            elif output[i][j] != tgt[i][j]: # if the output token is not equal to the target token, set is_correct to 0
                 is_correct = 0
-                break
+                total_tokens += 1
+            else:
+                correct_tokens += 1
+                total_tokens += 1
         correct_sequences += is_correct
         total_sequences += 1
     
     total_sequence_accuracy = correct_sequences / total_sequences
-    return total_sequence_accuracy
+    total_token_accuracy = correct_tokens / total_tokens
+    return total_token_accuracy, total_sequence_accuracy
 
 # Evaluation loop
 model.eval()
@@ -151,10 +157,10 @@ for key in pred_true_pairs_tgt.keys():
 
 # plot the accuracy for each sequence length
 from matplotlib import pyplot as plt
-plt.bar(token_acc.keys(), token_acc.values())
-plt.xlabel("Target Sequence Length")
-plt.ylabel("Token Accuracy")
-plt.title("Token accuracy")
+plt.bar([key - 2 for key in token_acc.keys()], token_acc.values())
+plt.xlabel("Command Length")
+plt.ylabel("Accuracy On New Commands")
+plt.title("Token-Level Accuracy by command length")
 plt.show()
 
 # plt.bar(sequence_acc.keys(), sequence_acc.values())
@@ -176,11 +182,10 @@ for key in pred_true_pairs_src.keys():
     token_acc[key], sequence_acc[key] = get_accuracy(preds, tgts, train_pad_idxs[1], train_pad_idxs[1])
 
 # plot the accuracy for each sequence length
-from matplotlib import pyplot as plt
-plt.bar(token_acc.keys(), token_acc.values())
-plt.xlabel("Target Sequence Length")
-plt.ylabel("Token Accuracy")
-plt.title("Token accuracy")
+plt.bar([key - 2 for key in token_acc.keys()], token_acc.values())
+plt.xlabel("Ground Trugh Action Sequence Length")
+plt.ylabel("Accuracy On New Commands")
+plt.title("Token-Level Accuracy by Action Sequence Length")
 plt.show()
 
 # plt.bar(sequence_acc.keys(), sequence_acc.values())
@@ -200,13 +205,47 @@ for key in pred_true_pairs_tgt.keys():
         tgts.append(tgt)
     preds = torch.cat(preds)
     tgts = torch.cat(tgts)
-    sequence_acc[key] = get_accuracy_oracle_length(preds, tgts, 8)
+    token_acc[key], sequence_acc[key] = get_accuracy_oracle_length(preds, tgts, 8)
 
-# plot the accuracy for each sequence length
-plt.bar(sequence_acc.keys(), sequence_acc.values())
-plt.xlabel("Target Sequence Length")
-plt.ylabel("Sequence Accuracy")
-plt.title("Sequence accuracy")
+# plot the accuracy for each token
+plt.bar([key - 2 for key in token_acc.keys()], token_acc.values())
+plt.xlabel("Ground Truth Action Sequence Length")
+plt.ylabel("Accuracy On New Commands")
+plt.title("Token-Level Accuracy by Action Sequence Length with oracle length")
+plt.show()
+
+# plot the accuracy for each sequence 
+plt.bar([key - 2 for key in token_acc.keys()], sequence_acc.values())
+plt.xlabel("Ground Truth Action Sequence Length")
+plt.ylabel("Accuracy On New Commands")
+plt.title("Sequence-Level Accuracy by Action Sequence Length with oracle length")
+plt.show()
+
+# calculate accuracy for oracle length
+token_acc = {}
+sequence_acc = {}
+for key in pred_true_pairs_src.keys():
+    preds = []
+    tgts = []
+    for pred, tgt in pred_true_pairs_src[key]:
+        preds.append(pred)
+        tgts.append(tgt)
+    preds = torch.cat(preds)
+    tgts = torch.cat(tgts)
+    token_acc[key], sequence_acc[key] = get_accuracy_oracle_length(preds, tgts, 8)
+
+# plot the accuracy for each token
+plt.bar([key - 2 for key in token_acc.keys()], token_acc.values())
+plt.xlabel("Command Length")
+plt.ylabel("Accuracy On New Commands")
+plt.title("Token-Level Accuracy by Command Length with oracle length")
+plt.show()
+
+# plot the accuracy for each sequence
+plt.bar([key - 2 for key in token_acc.keys()], sequence_acc.values())
+plt.xlabel("Command Length")
+plt.ylabel("Accuracy On New Commands")
+plt.title("Sequence-Level Accuracy by Command Length with oracle length")
 plt.show()
 
 
