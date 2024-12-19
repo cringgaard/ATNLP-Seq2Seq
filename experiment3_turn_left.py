@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import os
 from tqdm import tqdm
 
+EPOCHS = 5
 device = get_device()
 hyperparameters = experiment_hyperparameters["3"]
 
@@ -29,7 +30,7 @@ else:
 train_dataloader_res = make_dataloader(
     data_file=f"{trial_name}_train.txt",
     batch_size=hyperparameters["BATCH_SIZE"],
-    max_len=80,
+    max_len=50,
     upscale=True,
 )
 train_dataloader = train_dataloader_res["dataloader"]
@@ -48,13 +49,46 @@ model = Transformer(
     dropout=hyperparameters["DROPOUT"],
 ).to(device)
 
-# TODO train model
+model_path = f"models/{trial_name}.pt"
+if os.path.exists(model_path):
+    print("Found existing model")
+    model.load_state_dict(torch.load(model_path))
+    print(f"loaded model {model_path}")
+else:
+    print(f"Training model {trial_name}")
+    optimizer = optim.AdamW(model.parameters(), lr=hyperparameters["LEARNING_RATE"])
 
-# Save the model
-if not os.path.exists("models"):
-    os.makedirs("models")
+    criterion = nn.CrossEntropyLoss()
 
-torch.save(model.state_dict(), f"models/{trial_name}.pt")
+    for epoch in range(EPOCHS):
+        total_loss = 0
+        model.train()
+        for i, batch in enumerate(tqdm(train_dataloader, desc=f"Epoch {epoch}: Training batches")):
+            src, tgt = batch
+            src = src.to(device)
+            tgt = tgt.to(device)
+
+            optimizer.zero_grad()
+
+            output = model(src, tgt[:, :-1])
+            loss = criterion(
+                output.reshape(-1, output.size(-1)), tgt[:, 1:].reshape(-1)
+            )
+            loss.backward()
+
+            nn.utils.clip_grad_norm_(
+                model.parameters(), max_norm=hyperparameters["GRAD_CLIP"]
+            )
+
+            optimizer.step()
+
+            total_loss += loss.item()
+
+    # Save the model
+    if not os.path.exists("models"):
+        os.makedirs("models")
+
+    torch.save(model.state_dict(), model_path)
 
 # Evaluate
 model.eval()
@@ -62,7 +96,7 @@ model.eval()
 test_dataloader_res = make_dataloader(
     data_file=f"{trial_name}_test.txt",
     batch_size=hyperparameters["BATCH_SIZE"],
-    max_len=80,
+    max_len=50,
     upscale=True,
 )
 test_dataloader = test_dataloader_res["dataloader"]
@@ -75,40 +109,30 @@ total_sequence_accuracy = 0
 total_tokens = 0
 total_sequences = 0
 
+output_pad_idx = train_pad_idxs[0]
+tgt_pad_idx = train_pad_idxs[1]
+
 with torch.no_grad():
-    for i, (src, tgt) in enumerate(tqdm(test_dataloader, desc="Evaluating batches")):
+    for i, batch in enumerate(tqdm(test_dataloader, desc="Evaluating batches")):
+        src, tgt = batch
         src = src.to(device)
         tgt = tgt.to(device)
 
-        output = model(src, tgt)
-        output = output.argmax(dim=-1)
+        output = model(src, tgt[:, :-1])
+        pred_tokens = output.argmax(2)
+        # Pred with <SOS> token
+        pred_tokens = torch.cat([tgt[:, :1], pred_tokens], dim=-1)
 
-        if i == 0:
-            print("Output shape:", output.shape)
-            print("Input example:", src[0])
-            print("Output example:", output[0])
-            print("Target example:", tgt[0])
-
-        # Calculate token accuracy
-        correct_tokens = (output == tgt).sum().item()
-        total_tokens += output.numel()
-        total_token_accuracy += correct_tokens
+        # Calculate token accuracy in places where tgt and output are not padding tokens
+        correct_tokens = ((pred_tokens != output_pad_idx) & (pred_tokens == tgt)).sum().item()
+        total_tokens = (tgt != tgt_pad_idx).sum().item()
+        total_token_accuracy = correct_tokens / total_tokens
 
         # Calculate sequence accuracy
-        correct_sequences = (output == tgt).all(dim=-1).sum().item()
-        total_sequences += output.shape[0]
-        total_sequence_accuracy += correct_sequences
-
-        # print(
-        #     f"Batch {i}, Token Accuracy: {correct_tokens / output.numel():.6f}, Sequence Accuracy: {correct_sequences / output.shape[0]:.6f}"
-        # )
+        correct_sequences = (pred_tokens == tgt).all(dim=-1).sum().item()
+        total_sequences = pred_tokens.shape[0]
+        total_sequence_accuracy = correct_sequences / total_sequences
 
 print(
     f"Turn Left: Overall Token Accuracy: {total_token_accuracy / total_tokens:.6f}, Overall Sequence Accuracy: {total_sequence_accuracy / total_sequences:.6f}"
 )
-
-# Save evaluation results
-# with open("experiment-1-results.txt", "a") as f:
-#     f.write(
-#         f"Split: 2, Token Accuracy: {total_token_accuracy / total_tokens:.6f}, Sequence Accuracy: {total_sequence_accuracy / total_sequences:.6f}, {EPOCHS} epochs \n"
-#     )
