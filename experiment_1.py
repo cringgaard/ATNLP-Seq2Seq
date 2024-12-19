@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import os
+import json
 
 splits = [
     "p1",
@@ -17,42 +18,42 @@ splits = [
     "full",
 ]
 
-token_acc = []
-sequence_acc = []
-
-EPOCHS = 1
 device = get_device()
 hyperparameters = experiment_hyperparameters["1"]
+results = {}
+EPOCHS = 5
 
 
 for split in splits:
-
-    # Load the dataset
-    dataloader_res = make_dataloader(
+    train_loader_dict = make_dataloader(
         f"experiment_1_{split}_train.txt",
         hyperparameters["BATCH_SIZE"],
-        60,
-        desired_percentage=1,
-        upscale=False,
+        50,
+        1,
+        True,
+        100000,
     )
-    train_dataloader = dataloader_res["dataloader"]
-    train_pad_idxs = dataloader_res["pad_idxs"]
-
-    test_dataloader_res = make_dataloader(
+    test_loader_dict = make_dataloader(
         f"experiment_1_{split}_test.txt",
         hyperparameters["BATCH_SIZE"],
-        60,
-        desired_percentage=1,
-        upscale=False,
+        50,
+        1,
+        False,
+        100000,
     )
-    test_dataloader = test_dataloader_res["dataloader"]
 
-    # Initialize the model
+    src_pad_idx = train_loader_dict["pad_idxs"][0]
+    tgt_pad_idx = train_loader_dict["pad_idxs"][1]
+    src_sos_idx = src_pad_idx + 1
+    src_eos_idx = src_pad_idx + 2
+    tgt_sos_idx = tgt_pad_idx + 1
+    tgt_eos_idx = tgt_pad_idx + 2
+
     model = Transformer(
         src_vocab_size=13 + 3,
         tgt_vocab_size=6 + 3,  # 3 for <PAD>, <SOS>, <EOS>
-        src_pad_idx=train_pad_idxs[0],
-        tgt_pad_idx=train_pad_idxs[1],
+        src_pad_idx=src_pad_idx,
+        tgt_pad_idx=tgt_pad_idx,
         emb_dim=hyperparameters["EMB_DIM"],
         num_layers=hyperparameters["N_LAYERS"],
         num_heads=hyperparameters["N_HEADS"],
@@ -60,82 +61,63 @@ for split in splits:
         dropout=hyperparameters["DROPOUT"],
     ).to(device)
 
-    # Initialize the optimizer
     optimizer = optim.AdamW(model.parameters(), lr=hyperparameters["LEARNING_RATE"])
 
-    # Initialize the loss function
     criterion = nn.CrossEntropyLoss()
 
-    # Training loop
     for epoch in range(EPOCHS):
-        model.train()
         total_loss = 0
-        for i, (src, tgt) in enumerate(train_dataloader):
+        model.train()
+        for i, batch in enumerate(train_loader_dict["dataloader"]):
+            src, tgt = batch
             src = src.to(device)
             tgt = tgt.to(device)
 
             optimizer.zero_grad()
-            output = model(src, tgt)
-            loss = criterion(output.view(-1, 6 + 3), tgt.view(-1))
+
+            output = model(src, tgt[:, :-1])
+            loss = criterion(
+                output.reshape(-1, output.size(-1)), tgt[:, 1:].reshape(-1)
+            )
             loss.backward()
 
             nn.utils.clip_grad_norm_(
                 model.parameters(), max_norm=hyperparameters["GRAD_CLIP"]
             )
 
+
             optimizer.step()
 
             total_loss += loss.item()
+            if i % 100 == 0:
+                print(f"Epoch: {epoch}, Loss: {loss.item()}")
 
-    # Evaluation loop
     model.eval()
-    total_token_accuracy = 0
-    total_sequence_accuracy = 0
+    total_token_acc = 0
     total_tokens = 0
-    total_sequences = 0
-    
-    def get_accuracy(output, tgt, output_pad_idx, tgt_pad_idx):
-        # Calculate token accuracy in places where tgt and output are not padding tokens
-        correct_tokens = ((output != output_pad_idx) & (output == tgt)).sum().item()
-        total_tokens = (tgt != tgt_pad_idx).sum().item()
-        total_token_accuracy = correct_tokens / total_tokens
 
-        # Calculate sequence accuracy
-        correct_sequences = (output == tgt).all(dim=-1).sum().item()
-        total_sequences = output.shape[0]
-        total_sequence_accuracy = correct_sequences / total_sequences
-
-        return total_token_accuracy, total_sequence_accuracy
-
-    outputs = []
-    tgts = []
     with torch.no_grad():
-        for i, (src, tgt) in enumerate(test_dataloader):
+        for i, batch in enumerate(test_loader_dict["dataloader"]):
+            src, tgt = batch
             src = src.to(device)
             tgt = tgt.to(device)
-            SOS_token = torch.tensor([7]).to(device)
-            # Generate from <SOS> token
-            batched_SOS = SOS_token.repeat(tgt.shape[0], 1)
-            output = model(src, batched_SOS)
-            output = output.argmax(dim=-1)
-            # keep generating and appending to output until <EOS> token is generated
-            for i in range(1, tgt.shape[1]):
-                output = torch.cat((output, model(src, output[:,-1].unsqueeze(1)).argmax(dim=-1)), dim=1)
-            tgts.append(tgt)
-            outputs.append(output)
-    outputs = torch.cat(outputs)
-    tgts = torch.cat(tgts)
-    total_token_accuracy, total_sequence_accuracy = get_accuracy(outputs, tgts, train_pad_idxs[1], train_pad_idxs[1])
-    token_acc.append(total_token_accuracy)
-    sequence_acc.append(total_sequence_accuracy)
-    
+
+            output = model(src, tgt[:, :-1])
+            pred_tokens = output.argmax(2)
+            # Pred with <SOS> token
+            pred_tokens = torch.cat([tgt[:, :1], pred_tokens], dim=-1)
+            token_acc = (pred_tokens == tgt).sum()
+            total_token_acc += token_acc.item()
+            total_tokens += tgt.numel()
+
+    results[split] = total_token_acc / total_tokens
+    print(f"Split: {split}, Token Accuracy: {results[split]}")
+
+if not os.path.exists("results"):
+    os.makedirs("results")
 
 
-from matplotlib import pyplot as plt
-plt.bar(splits, token_acc)
-plt.title("Token accuracy")
-plt.show()
+with open("results/experiment_1.json", "w") as f:
+    json.dump(results, f)
 
-plt.bar(splits, sequence_acc)
-plt.title("Sequence accuracy")
-plt.show()
+print(results)
