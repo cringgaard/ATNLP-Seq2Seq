@@ -16,7 +16,7 @@ hyperparameters = experiment_hyperparameters["2"]
 dataloader_res = make_dataloader(
     f"experiment_2_full_train.txt",
     hyperparameters["BATCH_SIZE"],
-    60,
+    50,
     desired_percentage=1,
     upscale=False,
 )
@@ -26,7 +26,7 @@ train_pad_idxs = dataloader_res["pad_idxs"]
 test_dataloader_res = make_dataloader(
     f"experiment_2_full_test.txt",
     hyperparameters["BATCH_SIZE"],
-    60,
+    50,
     desired_percentage=1,
     upscale=False,
 )
