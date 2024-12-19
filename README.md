@@ -11,5 +11,5 @@ Then you can run:
 * experiment_1.py
 * experiment_2.py
 * experiment_3_jump.py
-* experiment_3_no_jump.py
+* experiment_3_turn_left.py
 
