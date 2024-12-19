@@ -1,6 +1,5 @@
 from scan_dataset import fetch_dataset, make_dataloader
 from scan_transformer import Transformer, experiment_hyperparameters, get_device
-from scan_train import train_model
 import torch
 import torch.nn as nn
 import torch.optim as optim
